@@ -1,0 +1,3 @@
+#!/bin/sh
+# не тащим ключи в git
+exec python3 scripts/check_repo.py

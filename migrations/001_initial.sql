@@ -1,0 +1,18 @@
+CREATE TABLE meta(key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE inbox(update_id INTEGER PRIMARY KEY, payload TEXT NOT NULL, received_at INTEGER NOT NULL, state TEXT NOT NULL DEFAULT 'pending', failures INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE connections(id TEXT PRIMARY KEY, owner_id INTEGER NOT NULL, owner_chat_id INTEGER NOT NULL, enabled INTEGER NOT NULL, rights TEXT NOT NULL, payload TEXT NOT NULL, updated_at INTEGER NOT NULL);
+CREATE TABLE users(connection_id TEXT NOT NULL, id INTEGER NOT NULL, profile TEXT NOT NULL, observed_at INTEGER NOT NULL, PRIMARY KEY(connection_id,id));
+CREATE TABLE user_history(id INTEGER PRIMARY KEY, connection_id TEXT NOT NULL, user_id INTEGER NOT NULL, profile TEXT NOT NULL, observed_at INTEGER NOT NULL);
+CREATE TABLE chats(connection_id TEXT NOT NULL, id INTEGER NOT NULL, metadata TEXT NOT NULL, PRIMARY KEY(connection_id,id));
+CREATE TABLE messages(connection_id TEXT NOT NULL, chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, sender_id INTEGER, sent_at INTEGER, first_seen INTEGER NOT NULL, deleted_at INTEGER, original_observed INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(connection_id,chat_id,message_id));
+CREATE TABLE versions(id INTEGER PRIMARY KEY, connection_id TEXT NOT NULL, chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, update_id INTEGER NOT NULL, sequence INTEGER NOT NULL, kind TEXT NOT NULL, text TEXT, caption TEXT, payload TEXT NOT NULL, observed_at INTEGER NOT NULL, telegram_edit_at INTEGER, UNIQUE(connection_id,chat_id,message_id,update_id), FOREIGN KEY(connection_id,chat_id,message_id) REFERENCES messages(connection_id,chat_id,message_id) ON DELETE CASCADE);
+CREATE TABLE deletions(update_id INTEGER NOT NULL, connection_id TEXT NOT NULL, chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, observed_at INTEGER NOT NULL, PRIMARY KEY(update_id,message_id));
+CREATE TABLE media(id INTEGER PRIMARY KEY, version_id INTEGER NOT NULL REFERENCES versions(id) ON DELETE CASCADE, kind TEXT NOT NULL, file_id TEXT NOT NULL, file_unique_id TEXT NOT NULL, metadata TEXT NOT NULL, path TEXT, sha256 TEXT, size INTEGER, state TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, next_attempt INTEGER NOT NULL DEFAULT 0, UNIQUE(version_id,kind,file_unique_id));
+CREATE TABLE saved(connection_id TEXT NOT NULL, chat_id INTEGER NOT NULL, message_id INTEGER NOT NULL, saved_at INTEGER NOT NULL, PRIMARY KEY(connection_id,chat_id,message_id));
+CREATE TABLE chat_settings(connection_id TEXT NOT NULL, chat_id INTEGER NOT NULL, settings TEXT NOT NULL, PRIMARY KEY(connection_id,chat_id));
+CREATE TABLE watches(connection_id TEXT NOT NULL, user_id INTEGER NOT NULL, PRIMARY KEY(connection_id,user_id));
+CREATE TABLE outbox(id INTEGER PRIMARY KEY, event_key TEXT UNIQUE NOT NULL, method TEXT NOT NULL, payload TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0, next_attempt INTEGER NOT NULL DEFAULT 0, error_code INTEGER);
+CREATE INDEX idx_versions_message ON versions(connection_id,chat_id,message_id,sequence);
+CREATE INDEX idx_media_pending ON media(state,next_attempt);
+CREATE INDEX idx_messages_time ON messages(connection_id,chat_id,sent_at);
+CREATE INDEX idx_history_user ON user_history(connection_id,user_id);

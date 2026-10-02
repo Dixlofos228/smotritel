@@ -1,0 +1,90 @@
+name: smotritel
+services:
+  bot:
+    build: .
+    env_file: .env
+    environment:
+      DATA_DIR: /data
+      API_BIND: 0.0.0.0
+      BOT_TOKEN_FILE: /run/secrets/bot_token
+      AI_API_KEY_FILE: /run/secrets/ai_api_key
+    secrets:
+      - bot_token
+      - ai_api_key
+    volumes:
+      - archive:/data
+    ports:
+      - "127.0.0.1:${LOCAL_API_PORT:-8787}:8787"
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, python, -m, smotritel.health]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+    depends_on:
+      - ollama
+      - stt
+  ollama:
+    image: ollama/ollama:0.18.0
+    healthcheck:
+      test: [CMD, ollama, list]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+    volumes:
+      - models:/root/.ollama
+    restart: unless-stopped
+  model-init:
+    image: ollama/ollama:0.18.0
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      AI_MODEL: ${AI_MODEL:-qwen2.5:3b}
+    entrypoint: [/bin/sh, -c]
+    command: ['until ollama list >/dev/null 2>&1; do sleep 2; done; ollama pull "$$AI_MODEL"']
+    depends_on: [ollama]
+    restart: on-failure
+  stt:
+    build:
+      context: .
+      dockerfile: Dockerfile.stt
+    environment:
+      HF_HUB_DISABLE_TELEMETRY: '1'
+      DO_NOT_TRACK: '1'
+      STT_MODEL: tiny
+    volumes:
+      - speech-models:/models
+    healthcheck:
+      test: [CMD, python, -c, "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:8090/health',timeout=3))['ready']"]
+      interval: 30s
+      timeout: 5s
+      start_period: 120s
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+  test:
+    build: .
+    profiles: [test]
+    entrypoint: [/bin/sh, -c]
+    command: ['apt-get update -qq && apt-get install -y -qq --no-install-recommends git && pip install --user -r requirements-dev.txt && python -m pytest -q']
+    user: root
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    volumes:
+      - ./tests:/app/tests:ro
+      - ./requirements-dev.txt:/app/requirements-dev.txt:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+volumes:
+  archive:
+  models:
+  speech-models:
+secrets:
+  bot_token:
+    file: ./secrets/bot_token
+  ai_api_key:
+    file: ./secrets/ai_api_key

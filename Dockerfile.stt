@@ -1,0 +1,7 @@
+FROM python:3.12-slim
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 HF_HUB_DISABLE_TELEMETRY=1 DO_NOT_TRACK=1
+RUN pip install --no-cache-dir aiohttp==3.13.3 faster-whisper==1.2.1 av==16.1.0 && useradd -u 1000 -m speech && mkdir /models && chown speech:speech /models
+WORKDIR /app
+COPY scripts/stt_server.py .
+USER speech
+CMD ["python", "stt_server.py"]
